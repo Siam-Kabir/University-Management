@@ -1,0 +1,112 @@
+# University Management System
+
+A small Spring Boot REST API for managing admin, teacher, and student accounts. It uses PostgreSQL, session login, BCrypt passwords, and role-based access rules.
+
+## Features and technology
+
+- Create, list, view, update, and delete admins, teachers, and students.
+- JSON requests and responses, input validation, and useful error codes.
+- Spring Security session login, logout, CSRF protection, and BCrypt hashing.
+- Java 21, Spring Boot 4.1.2, Spring MVC, Spring Data JPA, PostgreSQL, Maven, and Docker Compose.
+
+## Project structure
+
+```text
+src/main/java/com/university/management/
+  ManagementApplication.java       starts Spring Boot
+  controller/                     REST endpoints
+  dto/                            request and safe response data
+  exception/                      API errors
+  model/                          Account entity and Role enum
+  repository/                     database access
+  security/                       login rules and optional demo data
+  service/                        account CRUD logic
+src/main/resources/application.properties
+src/test/java/com/university/management/UniversityApiTests.java
+Dockerfile
+compose.yaml
+LAB_WALKTHROUGH.md
+```
+
+This follows MVC-style layers: the controller receives an HTTP request, the service applies business rules, the repository accesses the database, and a DTO controls the JSON response. A single `Account` entity stores all three roles. The URL and controller decide the role; clients cannot submit or change it.
+
+## Role permissions
+
+| Role | Admin API | Teacher API | Student API |
+|---|---|---|---|
+| ADMIN | CRUD | CRUD | CRUD |
+| TEACHER | No access | CRUD | No access |
+| STUDENT | No access | No access | CRUD |
+
+These rules are enforced in `SecurityConfig`, before controller methods run. A teacher may manage any teacher account; a student may manage any student account, as required by the permission table.
+
+## Run with Docker Compose
+
+Install Docker, then run from the project folder:
+
+```bash
+docker compose up --build
+```
+
+The API is at `http://localhost:8080`. Compose starts PostgreSQL first, waits for its health check, and stores its data in a named volume. The app connects to `db`, the Compose database service name. The passwords in `compose.yaml` are **development examples only**. Set `DB_PASSWORD`, `DEMO_ADMIN_PASSWORD`, `DEMO_TEACHER_PASSWORD`, and `DEMO_STUDENT_PASSWORD` in your environment before using this setup outside a local demo. Demo users are only created if their email does not already exist; changing an environment password does not reset an existing account.
+
+## Run locally
+
+Install Java 21 and PostgreSQL. Create a database named `university` and a database user with access to it. Set these environment variables and start the project:
+
+```powershell
+$env:DB_URL = 'jdbc:postgresql://localhost:5432/university'
+$env:DB_USER = 'university'
+$env:DB_PASSWORD = 'your-local-database-password'
+$env:DEMO_USERS_ENABLED = 'true'
+$env:DEMO_ADMIN_PASSWORD = 'Admin123!'
+$env:DEMO_TEACHER_PASSWORD = 'Teacher123!'
+$env:DEMO_STUDENT_PASSWORD = 'Student123!'
+.\mvnw.cmd spring-boot:run
+```
+
+Use `./mvnw spring-boot:run` on macOS/Linux. The application creates or updates the simple database table through JPA. `DEMO_USERS_ENABLED` is `false` by default. For real deployments, use proper secrets and database migration management.
+
+## API endpoints
+
+| Method | Endpoint | Meaning |
+|---|---|---|
+| GET | `/api/auth/csrf` | Get CSRF token and session cookie |
+| POST | `/api/auth/login` | Log in with JSON email and password |
+| POST | `/api/auth/logout` | Log out |
+| GET, POST | `/api/admins`, `/api/teachers`, `/api/students` | List or create |
+| GET, PUT, DELETE | `/api/admins/{id}`, `/api/teachers/{id}`, `/api/students/{id}` | View, update, or delete |
+
+Create body: `{"name":"New Student","email":"new@university.test","password":"Secret123!"}`. Update body uses `name` and `email`, with an optional `password`. Passwords need at least 8 characters. Responses contain `id`, `name`, `email`, and `role`, never the password hash. Success codes are 200, 201, and 204. Errors use 400, 401, 403, 404, or 409 with an `error` message. Unsafe requests also require a CSRF token. A missing token on an anonymous protected request returns 401; an invalid or missing token in an authenticated session returns 403.
+
+## Demo accounts
+
+When Compose starts with the example environment values:
+
+| Role | Email | Development password |
+|---|---|---|
+| ADMIN | `admin@university.test` | `Admin123!` |
+| TEACHER | `teacher@university.test` | `Teacher123!` |
+| STUDENT | `student@university.test` | `Student123!` |
+
+These credentials are only for a local lab demonstration. Passwords are stored as BCrypt hashes in PostgreSQL.
+
+## Try login and CRUD in PowerShell
+
+Keep the same web session for the CSRF request, login, and later API calls:
+
+```powershell
+$base = 'http://localhost:8080'
+$token = (Invoke-RestMethod "$base/api/auth/csrf" -SessionVariable session).token
+$headers = @{ 'X-CSRF-TOKEN' = $token }
+Invoke-RestMethod "$base/api/auth/login" -Method Post -WebSession $session -Headers $headers -ContentType 'application/json' -Body '{"email":"admin@university.test","password":"Admin123!"}'
+Invoke-RestMethod "$base/api/students" -WebSession $session
+Invoke-RestMethod "$base/api/students" -Method Post -WebSession $session -Headers $headers -ContentType 'application/json' -Body '{"name":"New Student","email":"new@university.test","password":"Secret123!"}'
+Invoke-RestMethod "$base/api/auth/logout" -Method Post -WebSession $session -Headers $headers
+```
+
+Use the returned student `id` for `GET`, `PUT`, and `DELETE` on `/api/students/{id}`. To see the access rules, log in as a teacher and try `/api/students`: it returns 403. A protected GET without login returns 401.
+
+## Tests
+
+Run `./mvnw test` or `.\mvnw.cmd test`. Integration tests use an in-memory H2 database, so PostgreSQL is not needed for the test suite. They exercise login, logout, session and CSRF behavior, CRUD, hashing, validation, error responses, and each role's access rules.
