@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -31,7 +32,12 @@ public class SecurityConfig {
                 .anyRequest().denyAll())
             .exceptionHandling(errors -> errors
                 .authenticationEntryPoint((request, response, ex) -> writeError(response, 401, "Authentication required"))
-                .accessDeniedHandler((request, response, ex) -> writeError(response, 403, "Access denied")))
+                .accessDeniedHandler((request, response, ex) -> {
+                    boolean anonymousWrite = SecurityContextHolder.getContext().getAuthentication() == null
+                            && !request.getRequestURI().startsWith("/api/auth/");
+                    writeError(response, anonymousWrite ? 401 : 403,
+                            anonymousWrite ? "Authentication required" : "Access denied");
+                }))
             .logout(logout -> logout.logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((request, response, authentication) -> response.setStatus(204)));
         return http.build();
