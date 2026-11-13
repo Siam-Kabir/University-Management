@@ -53,9 +53,47 @@ class UniversityApiTests {
                 .content("{\"email\":\"admin@test.com\",\"password\":\"Admin123!\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("ADMIN"));
         mvc.perform(get("/api/admins").session(session)).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("admin@test.com"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.password").doesNotExist());
         mvc.perform(post("/api/auth/logout").session(session).header("X-CSRF-TOKEN", token))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/admins").session(session)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminCannotDeleteOwnAccountButCanDeleteAnotherAdmin() throws Exception {
+        long ownId = repository.findByEmailIgnoreCase("admin@test.com").orElseThrow().getId();
+        Account other = repository.save(new Account("Other Admin", "other-admin@test.com",
+                encoder.encode("Secret123!"), Role.ADMIN));
+        mvc.perform(delete("/api/admins/{id}", ownId)
+                .with(user("admin@test.com").roles("ADMIN")).with(csrf()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("You cannot delete your own account"));
+        assertTrue(repository.existsById(ownId));
+        mvc.perform(delete("/api/admins/{id}", other.getId())
+                .with(user("admin@test.com").roles("ADMIN")).with(csrf()))
+                .andExpect(status().isNoContent());
+        assertFalse(repository.existsById(other.getId()));
+    }
+
+    @Test
+    void frontendIsPublicWhileSessionDetailsStayProtected() throws Exception {
+        mvc.perform(get("/")).andExpect(status().isOk()).andExpect(forwardedUrl("index.html"));
+        mvc.perform(get("/index.html")).andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("University Management System")));
+        mvc.perform(get("/assets/app.js")).andExpect(status().isOk());
+        mvc.perform(get("/assets/styles.css")).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/me")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").with(user("teacher@test.com").roles("TEACHER")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("TEACHER"));
+        mvc.perform(get("/api/auth/me").with(user("missing@test.com").roles("STUDENT")))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/private-file")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -76,30 +114,60 @@ class UniversityApiTests {
         for (String path : new String[]{"/api/admins", "/api/teachers", "/api/students"}) {
             mvc.perform(get(path).with(user("admin").roles("ADMIN"))).andExpect(status().isOk());
         }
-        mvc.perform(get("/api/teachers").with(user("teacher").roles("TEACHER"))).andExpect(status().isOk());
+        mvc.perform(get("/api/teachers").with(user("teacher@test.com").roles("TEACHER")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
         mvc.perform(get("/api/admins").with(user("teacher").roles("TEACHER"))).andExpect(status().isForbidden());
         mvc.perform(get("/api/students").with(user("teacher").roles("TEACHER"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/students").with(user("student").roles("STUDENT"))).andExpect(status().isOk());
+        mvc.perform(get("/api/students").with(user("student@test.com").roles("STUDENT")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
         mvc.perform(get("/api/admins").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());
         mvc.perform(get("/api/teachers").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());
     }
 
     @Test
-    void teachersAndStudentsCanWriteOnlyTheirOwnResource() throws Exception {
+    void teachersAndStudentsCanViewAndEditOnlyTheirOwnAccount() throws Exception {
         String body = "{\"name\":\"Another Person\",\"email\":\"another@test.com\",\"password\":\"Secret123!\"}";
-        mvc.perform(post("/api/teachers").with(user("teacher").roles("TEACHER")).with(csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated());
+        long teacherId = repository.findByEmailIgnoreCase("teacher@test.com").orElseThrow().getId();
+        long studentId = repository.findByEmailIgnoreCase("student@test.com").orElseThrow().getId();
+        mvc.perform(post("/api/teachers").with(user("teacher@test.com").roles("TEACHER")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
         mvc.perform(post("/api/students").with(user("teacher").roles("TEACHER")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
         mvc.perform(post("/api/admins").with(user("student").roles("STUDENT")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
-        mvc.perform(post("/api/students").with(user("student").roles("STUDENT")).with(csrf())
+        mvc.perform(post("/api/students").with(user("student@test.com").roles("STUDENT")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body.replace("another@test.com", "student2@test.com"))).andExpect(status().isCreated());
+                .content(body.replace("another@test.com", "student2@test.com"))).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/teachers/{id}", teacherId).with(user("teacher@test.com").roles("TEACHER")).with(csrf()))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/students/{id}", studentId).with(user("student@test.com").roles("STUDENT")).with(csrf()))
+                .andExpect(status().isForbidden());
         mvc.perform(put("/api/teachers/1").with(user("student").roles("STUDENT")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
         mvc.perform(delete("/api/students/1").with(user("teacher").roles("TEACHER")).with(csrf()))
                 .andExpect(status().isForbidden());
+        mvc.perform(get("/api/teachers/{id}", teacherId).with(user("teacher@test.com").roles("TEACHER")))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/students/{id}", studentId).with(user("student@test.com").roles("STUDENT")))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/teachers/{id}", teacherId).with(user("teacher@test.com").roles("TEACHER")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Updated Teacher\",\"email\":\"teacher@test.com\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Updated Teacher"));
+        mvc.perform(put("/api/students/{id}", studentId).with(user("student@test.com").roles("STUDENT")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Updated Student\",\"email\":\"student@test.com\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Updated Student"));
+        MvcResult other = mvc.perform(post("/api/teachers").with(user("admin@test.com").roles("ADMIN")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn();
+        long otherId = new tools.jackson.databind.ObjectMapper()
+                .readTree(other.getResponse().getContentAsString()).get("id").asLong();
+        mvc.perform(get("/api/teachers").with(user("teacher@test.com").roles("TEACHER")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/teachers/{id}", otherId).with(user("teacher@test.com").roles("TEACHER")))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/teachers/{id}", otherId).with(user("teacher@test.com").roles("TEACHER")).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
     }
 
     @Test
@@ -114,7 +182,7 @@ class UniversityApiTests {
         Account account = repository.findById(id).orElseThrow();
         assertNotEquals("Secret123!", account.getPassword());
         assertTrue(encoder.matches("Secret123!", account.getPassword()));
-        mvc.perform(get("/api/students/{id}", id).with(user("student").roles("STUDENT")))
+        mvc.perform(get("/api/students/{id}", id).with(user("new@test.com").roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("New Student"));
         mvc.perform(put("/api/students/{id}", id).with(user("admin").roles("ADMIN")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -128,7 +196,7 @@ class UniversityApiTests {
 
     @Test
     void validationDuplicatesAndMissingRecordsReturnUsefulErrors() throws Exception {
-        mvc.perform(post("/api/teachers").with(user("teacher").roles("TEACHER")).with(csrf())
+        mvc.perform(post("/api/teachers").with(user("admin").roles("ADMIN")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"X\",\"email\":\"bad\",\"password\":\"short\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").exists());
