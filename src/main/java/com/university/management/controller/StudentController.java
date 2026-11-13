@@ -3,7 +3,9 @@ package com.university.management.controller;
 import com.university.management.dto.*;
 import com.university.management.model.Role;
 import com.university.management.service.AccountService;
+import com.university.management.security.AccountAccess;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,10 +20,16 @@ public class StudentController {
     public StudentController(AccountService service) { this.service = service; }
 
     @GetMapping
-    public List<AccountResponse> all() { return service.findAll(Role.STUDENT); }
+    public List<AccountResponse> all(Authentication user) {
+        return AccountAccess.visible(service.findAll(Role.STUDENT), user);
+    }
 
     @GetMapping("/{id}")
-    public AccountResponse one(@PathVariable Long id) { return service.findById(id, Role.STUDENT); }
+    public AccountResponse one(@PathVariable Long id, Authentication user) {
+        AccountResponse account = service.findById(id, Role.STUDENT);
+        AccountAccess.requireOwner(account, user);
+        return account;
+    }
 
     @PostMapping
     public ResponseEntity<AccountResponse> create(@Valid @RequestBody CreateAccountRequest request) {
@@ -30,7 +38,8 @@ public class StudentController {
     }
 
     @PutMapping("/{id}")
-    public AccountResponse update(@PathVariable Long id, @Valid @RequestBody UpdateAccountRequest request) {
+    public AccountResponse update(@PathVariable Long id, @Valid @RequestBody UpdateAccountRequest request, Authentication user) {
+        AccountAccess.requireOwner(service.findById(id, Role.STUDENT), user);
         return service.update(id, request, Role.STUDENT);
     }
 

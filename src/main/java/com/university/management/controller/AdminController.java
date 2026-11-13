@@ -4,6 +4,8 @@ import com.university.management.dto.*;
 import com.university.management.model.Role;
 import com.university.management.service.AccountService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,5 +38,11 @@ public class AdminController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) { service.delete(id, Role.ADMIN); }
+    public void delete(@PathVariable Long id, Authentication user) {
+        AccountResponse account = service.findById(id, Role.ADMIN);
+        if (account.email().equalsIgnoreCase(user.getName())) {
+            throw new AccessDeniedException("You cannot delete your own account");
+        }
+        service.delete(id, Role.ADMIN);
+    }
 }

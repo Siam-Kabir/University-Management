@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -24,9 +25,12 @@ public class SecurityConfig {
         http
             .securityContext(context -> context.securityContextRepository(contextRepository))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/", "/index.html", "/assets/**").permitAll()
                 .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
-                .requestMatchers("/api/auth/logout").authenticated()
+                .requestMatchers("/api/auth/logout", "/api/auth/me").authenticated()
                 .requestMatchers("/api/admins/**", "/api/admins").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/teachers", "/api/students").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/teachers/**", "/api/students/**").hasRole("ADMIN")
                 .requestMatchers("/api/teachers/**", "/api/teachers").hasAnyRole("ADMIN", "TEACHER")
                 .requestMatchers("/api/students/**", "/api/students").hasAnyRole("ADMIN", "STUDENT")
                 .anyRequest().denyAll())

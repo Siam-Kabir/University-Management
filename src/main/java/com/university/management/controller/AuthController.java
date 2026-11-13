@@ -1,6 +1,8 @@
 package com.university.management.controller;
 
 import com.university.management.dto.LoginRequest;
+import com.university.management.dto.AccountResponse;
+import com.university.management.repository.AccountRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -22,10 +24,20 @@ import java.util.Map;
 public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository contextRepository;
+    private final AccountRepository repository;
 
-    public AuthController(AuthenticationManager authenticationManager, SecurityContextRepository contextRepository) {
+    public AuthController(AuthenticationManager authenticationManager, SecurityContextRepository contextRepository,
+                          AccountRepository repository) {
         this.authenticationManager = authenticationManager;
         this.contextRepository = contextRepository;
+        this.repository = repository;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<AccountResponse> me(Authentication authentication) {
+        return repository.findByEmailIgnoreCase(authentication.getName())
+                .map(account -> ResponseEntity.ok(AccountResponse.from(account)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 
     @GetMapping("/csrf")
