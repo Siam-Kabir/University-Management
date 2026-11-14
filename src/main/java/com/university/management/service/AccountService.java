@@ -42,7 +42,7 @@ public class AccountService {
     public AccountResponse update(Long id, UpdateAccountRequest request, Role role) {
         Account account = findAccount(id, role);
         String email = normalizeEmail(request.email());
-        if (!account.getEmail().equals(email) && repository.existsByEmailIgnoreCase(email)) {
+        if (!account.getEmail().equalsIgnoreCase(email) && repository.existsByEmailIgnoreCase(email)) {
             throw new DuplicateEmailException();
         }
         account.setName(request.name().trim());
