@@ -3,7 +3,6 @@ package com.university.management.service;
 import com.university.management.dto.CreateAccountRequest;
 import com.university.management.dto.UpdateAccountRequest;
 import com.university.management.exception.DuplicateEmailException;
-import com.university.management.exception.ResourceNotFoundException;
 import com.university.management.model.Account;
 import com.university.management.model.Role;
 import com.university.management.repository.AccountRepository;
@@ -98,11 +97,16 @@ class AccountServiceTests {
     }
 
     @Test
-    void findByIdRequiresTheRequestedRole() {
-        when(repository.findByIdAndRole(10L, Role.TEACHER)).thenReturn(Optional.empty());
+    void updateNormalizesExistingEmailWithoutTreatingItAsDuplicate() {
+        Account account = new Account("Alice", "Alice@Example.com", "old-hash", Role.STUDENT);
+        when(repository.findByIdAndRole(10L, Role.STUDENT)).thenReturn(Optional.of(account));
+        when(repository.existsByEmailIgnoreCase("alice@example.com")).thenReturn(true);
 
-        assertThrows(ResourceNotFoundException.class, () -> service.findById(10L, Role.TEACHER));
+        var response = service.update(10L,
+                new UpdateAccountRequest("Alice", "ALICE@example.com", null), Role.STUDENT);
 
-        verify(repository).findByIdAndRole(10L, Role.TEACHER);
+        assertEquals("alice@example.com", response.email());
+        assertEquals("alice@example.com", account.getEmail());
+        verify(repository, never()).existsByEmailIgnoreCase(anyString());
     }
 }

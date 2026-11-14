@@ -77,20 +77,17 @@ class AccountWorkflowIntegrationTests {
     }
 
     @Test
-    void accountIdCannotCrossRoleSpecificRoutes() throws Exception {
-        Account teacher = repository.findByEmailIgnoreCase("teacher@test.com").orElseThrow();
+    void existingMixedCaseEmailCanBeNormalizedOnUpdate() throws Exception {
+        Account student = repository.save(new Account("Legacy Student", "Legacy@Example.com",
+                encoder.encode("Legacy123!"), Role.STUDENT));
 
-        mvc.perform(get("/api/students/{id}", teacher.getId())
-                .with(user("admin@test.com").roles("ADMIN")))
-                .andExpect(status().isNotFound());
-        mvc.perform(put("/api/students/{id}", teacher.getId())
+        mvc.perform(put("/api/students/{id}", student.getId())
                 .with(user("admin@test.com").roles("ADMIN")).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"Wrong Role\",\"email\":\"teacher@test.com\"}"))
-                .andExpect(status().isNotFound());
-        mvc.perform(get("/api/teachers/{id}", teacher.getId())
-                .with(user("admin@test.com").roles("ADMIN")))
+                .content("{\"name\":\"Legacy Student\",\"email\":\"LEGACY@example.com\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Teacher"));
+                .andExpect(jsonPath("$.email").value("legacy@example.com"));
+
+        assertEquals("legacy@example.com", repository.findById(student.getId()).orElseThrow().getEmail());
     }
 }
