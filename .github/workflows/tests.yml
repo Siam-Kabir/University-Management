@@ -31,7 +31,41 @@ jobs:
           if-no-files-found: ignore
 
   integration:
-    name: API integration tests (11)
+    name: Integration ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: create
+            label: 1/3 - create and view student
+            method: adminCreatesStudentWhoCanSeeOnlyTheirOwnRecord
+          - id: conflict
+            label: 2/3 - reject duplicate email
+            method: conflictingUpdateReturns409AndLeavesStoredAccountIntact
+          - id: normalize
+            label: 3/3 - normalize existing email
+            method: existingMixedCaseEmailCanBeNormalizedOnUpdate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test one complete HTTP account workflow
+        run: bash ./mvnw --batch-mode "-Dtest=AccountWorkflowIntegrationTests#${{ matrix.method }}" test
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-${{ matrix.id }}-report
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+  existing-api:
+    name: Existing API regression tests (8)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -41,12 +75,12 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Test HTTP security and account workflows
-        run: bash ./mvnw --batch-mode -Dtest=UniversityApiTests,AccountWorkflowIntegrationTests test
-      - name: Upload integration test report
+      - name: Run existing security and CRUD tests
+        run: bash ./mvnw --batch-mode -Dtest=UniversityApiTests test
+      - name: Upload existing API test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-test-report
+          name: existing-api-test-report
           path: target/surefire-reports/
           if-no-files-found: ignore
