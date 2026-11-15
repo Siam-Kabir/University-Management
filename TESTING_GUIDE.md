@@ -2,7 +2,7 @@
 
 ## What the two test layers prove
 
-The six **unit tests** call `AccountService` directly with a mocked repository and password encoder. They check business rules without starting Spring or a database. The three **new integration tests** send HTTP requests through Spring Security, controllers, service, and an H2 database. Eight earlier API tests also run in the integration job. H2 keeps the suite independent of a running PostgreSQL server.
+The six **unit tests** call `AccountService` directly with a mocked repository and password encoder. They check business rules without starting Spring or a database. The three **account integration tests** send MockMvc requests through Spring Security, controllers, service, and a database. They use H2 locally and a PostgreSQL service container in GitHub Actions. Eight earlier API tests run separately with H2. MockMvc does not start an external HTTP server.
 
 | Layer | Test case | Expected behavior |
 |---|---|---|
@@ -24,13 +24,13 @@ An older account can contain `Legacy@Example.com`. Updating that same account wi
 2. `9654c0d fix(account): allow case normalization of current email` changed the comparison to ignore letter case. The duplicate-email tests still protect against using **another** account's email.
 3. The full suite then passed: 6 unit tests + 11 integration tests = 17 tests, with 0 failures or errors.
 
-This is a regression test: it records a real fault so the same behavior cannot silently return later.
+This is a regression test: it records a real fault so the same behavior cannot silently return later. The original failing GitHub Actions runs were stopped before tests started; do not describe them as test failures. The failing behavior above was demonstrated by the regression tests before the fix.
 
 For a quick presentation, run `git show --stat 9c5adac` to point to the tests, then `git show 9654c0d` to show the one-line production fix. Explain that the same-email test changed from a 409 error to a successful update, while the other-account duplicate test stayed green.
 
 ## Run the tests
 
-Use Java 21 or newer. On macOS or Linux:
+Use Java 21 or newer. Local runs use H2 and do not require Docker or PostgreSQL. On macOS or Linux:
 
 ```bash
 bash ./mvnw --batch-mode -Dtest=AccountServiceTests test
@@ -40,6 +40,6 @@ bash ./mvnw --batch-mode -Dtest=UniversityApiTests test
 
 On Windows PowerShell, use `.\mvnw.cmd` in place of `bash ./mvnw`. Run `./mvnw test` (or `.\mvnw.cmd test`) for all 17 tests together. Surefire writes detailed results to `target/surefire-reports/`.
 
-The GitHub Actions workflow shows five jobs: one unit job for six tests, three integration jobs for the three cases in the table above, and one regression job for the eight older API tests. Each integration job runs one method from `AccountWorkflowIntegrationTests` and uploads its own Surefire report. A job is a CI container; it is not the same as a test method.
+The GitHub Actions workflow has three jobs: six unit tests, all three account integration tests in **one** job, and eight earlier API regression tests. The integration job starts `postgres:17` as a Docker service, waits for its health check, and connects the Spring test context to that database. The test setup verifies that the database product is PostgreSQL. Each job uploads a Surefire report; the integration report lists all three test methods. A job is not the same thing as a test method.
 
-[This GitHub Actions run](https://github.com/Siam-Kabir/University-Management/actions/runs/43691598445) passed all five jobs: six unit tests, the three individually named new integration tests, and eight existing API regression tests. Earlier red runs were rejected before any test step started; they are not examples of a failing test. Use the regression commits and the local test output above to explain the real red → green sequence.
+This workflow performs continuous integration (CI). It does not deploy the application (CD), and the integration job does not exercise the app's `compose.yaml`. Docker Compose is used separately to run the application and database together for a demo.

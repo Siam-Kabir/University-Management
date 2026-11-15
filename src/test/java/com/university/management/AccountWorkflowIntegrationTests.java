@@ -10,8 +10,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import javax.sql.DataSource;
+import java.sql.SQLException;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,18 +24,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:workflowtest;DB_CLOSE_DELAY=-1",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "demo.users.enabled=false"})
+@ActiveProfiles("workflow")
 class AccountWorkflowIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired AccountRepository repository;
     @Autowired PasswordEncoder encoder;
+    @Autowired DataSource dataSource;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws SQLException {
+        if ("true".equals(System.getenv("EXPECT_POSTGRES"))) {
+            try (var connection = dataSource.getConnection()) {
+                assertEquals("PostgreSQL", connection.getMetaData().getDatabaseProductName());
+            }
+        }
         repository.deleteAll();
         repository.save(new Account("Admin", "admin@test.com", encoder.encode("Admin123!"), Role.ADMIN));
         repository.save(new Account("Teacher", "teacher@test.com", encoder.encode("Teacher123!"), Role.TEACHER));
