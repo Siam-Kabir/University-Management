@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -24,7 +24,7 @@ jobs:
         run: bash ./mvnw --batch-mode -Dtest=AccountServiceTests test
       - name: Upload unit test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-report
           path: target/surefire-reports/
@@ -55,8 +55,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -65,7 +65,7 @@ jobs:
         run: bash ./mvnw --batch-mode -Dtest=AccountWorkflowIntegrationTests test
       - name: Upload integration test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: integration-test-report
           path: target/surefire-reports/
@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -86,7 +86,7 @@ jobs:
         run: bash ./mvnw --batch-mode -Dtest=UniversityApiTests test
       - name: Upload existing API test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: existing-api-test-report
           path: target/surefire-reports/
