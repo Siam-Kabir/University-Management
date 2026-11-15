@@ -34,9 +34,12 @@ Use Java 21 or newer. On macOS or Linux:
 
 ```bash
 bash ./mvnw --batch-mode -Dtest=AccountServiceTests test
-bash ./mvnw --batch-mode -Dtest=UniversityApiTests,AccountWorkflowIntegrationTests test
+bash ./mvnw --batch-mode -Dtest=AccountWorkflowIntegrationTests test
+bash ./mvnw --batch-mode -Dtest=UniversityApiTests test
 ```
 
 On Windows PowerShell, use `.\mvnw.cmd` in place of `bash ./mvnw`. Run `./mvnw test` (or `.\mvnw.cmd test`) for all 17 tests together. Surefire writes detailed results to `target/surefire-reports/`.
 
-The GitHub Actions workflow runs these two commands in separate jobs and uploads each job's reports. A red Actions status is evidence of a test failure only if the job actually starts and reaches a test step. On 15 November 2026, GitHub rejected this repository's jobs before any step ran and displayed an account-level lock message. Those runs do not show the red → green test sequence; the local failure and passing test results above do. Once GitHub starts jobs again, the workflow can verify the same sequence online.
+The GitHub Actions workflow shows five jobs: one unit job for six tests, three integration jobs for the three cases in the table above, and one regression job for the eight older API tests. Each integration job runs one method from `AccountWorkflowIntegrationTests` and uploads its own Surefire report. A job is a CI container; it is not the same as a test method.
+
+[This GitHub Actions run](https://github.com/Siam-Kabir/University-Management/actions/runs/43691598445) passed all five jobs: six unit tests, the three individually named new integration tests, and eight existing API regression tests. Earlier red runs were rejected before any test step started; they are not examples of a failing test. Use the regression commits and the local test output above to explain the real red → green sequence.
