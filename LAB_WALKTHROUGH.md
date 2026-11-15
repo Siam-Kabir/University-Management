@@ -2,7 +2,9 @@
 
 ## A. Project overview
 
-This application manages three kinds of university accounts: admins, teachers, and students. Each role has a REST API with create, read, update, and delete operations. Spring Boot starts the web server, creates the Spring components, and configures the database and security libraries from the project dependencies.
+This application manages three kinds of university accounts: admins, teachers, and students. Each account resource has REST endpoints for create, read, update, and delete, with permissions depending on the signed-in role. Spring Boot starts the web server, creates the Spring components, and configures the database and security libraries from the project dependencies.
+
+Browser page → JavaScript `fetch()` → Spring Security → Controller → AccountService → AccountRepository → database. The result returns as JSON, and JavaScript updates the page. Spring Boot serves both the browser files and the API on port 8080, so no separate frontend server is needed.
 
 ## B. Important folders and files
 
@@ -16,6 +18,8 @@ This application manages three kinds of university accounts: admins, teachers, a
 - `exception/ApiExceptionHandler.java` turns validation, duplicate email, and missing account problems into useful HTTP errors.
 - `security/SecurityConfig.java` defines the BCrypt encoder, account lookup for login, session storage, and URL permission rules. `DemoDataInitializer.java` optionally creates three lab accounts.
 - `application.properties` reads database and demo settings from environment variables.
+- `application-local.properties` provides an in-memory H2 database and demo users for running directly in IntelliJ.
+- `static/index.html` and `static/assets/` are the browser UI served by Spring Boot. The JavaScript calls the REST API using the login session and CSRF token.
 - `Dockerfile` builds the JAR and runs it in a Java container. `compose.yaml` runs the app and PostgreSQL together.
 
 There is one account table rather than three almost identical tables. The `role` column distinguishes the three resources. This keeps the lab project small and gives every email one unique login.
@@ -25,13 +29,13 @@ There is one account table rather than three almost identical tables. The `role`
 Example: an admin creates a student.
 
 1. The client sends `POST /api/students` with JSON containing `name`, `email`, and `password`, plus its session cookie and CSRF token.
-2. `SecurityConfig.securityFilterChain()` checks that the session has the ADMIN or STUDENT role. Validation checks the request fields.
+2. `SecurityConfig.securityFilterChain()` checks that the session has the ADMIN role. Validation checks the request fields.
 3. `StudentController.create()` calls `AccountService.create(request, Role.STUDENT)`.
 4. `AccountService.create()` checks whether the email exists, hashes the password with BCrypt, and creates an `Account` whose role is STUDENT.
 5. `AccountRepository.save()` writes the row to PostgreSQL.
 6. `AccountResponse.from()` builds safe response data. The controller returns HTTP 201 and a `Location` header.
 
-For reading, `findAll()` or `findById()` calls repository queries filtered by role. For updating, `update()` changes the name, email, and optional password. For deleting, `delete()` removes the matching account. A missing ID returns 404.
+For reading, `findAll()` or `findById()` calls repository queries filtered by role. For updating, `update()` changes the name, email, and optional password. For deleting, `delete()` removes the matching account. An admin cannot delete the account they are currently signed in with. A missing ID returns 404.
 
 ## D. How login works
 
@@ -46,7 +50,7 @@ The database never stores or sends a plain-text password. Demo passwords come fr
 
 ## E. How role-based security works
 
-`SecurityConfig.securityFilterChain()` has URL rules. `/api/admins` requires ADMIN. `/api/teachers` allows ADMIN or TEACHER. `/api/students` allows ADMIN or STUDENT. The same rules cover paths with IDs and all HTTP methods. A teacher asking for `/api/students` is authenticated but does not have an allowed role, so Spring Security's access denied handler returns 403. A visitor without login gets 401 for a protected request. CSRF separately rejects unsafe authenticated requests without a valid token with 403. Controllers also pass a fixed `Role` to the service, so a client cannot change a role by adding a field to JSON.
+`SecurityConfig.securityFilterChain()` has URL and HTTP method rules. Only ADMIN can create or delete accounts. ADMIN can read and update any account. TEACHER can read and update only their own teacher account; STUDENT can read and update only their own student account. `AccountAccess` applies the ownership checks in the controllers. An admin cannot delete their own signed-in account. A teacher asking for `/api/students` gets 403. A visitor without login gets 401 for a protected request. CSRF separately rejects unsafe authenticated requests without a valid token with 403. Controllers pass a fixed `Role` to the service, so a client cannot change a role by adding a field to JSON.
 
 ## F. How Docker works
 

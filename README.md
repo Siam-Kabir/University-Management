@@ -4,9 +4,10 @@ A small Spring Boot REST API for managing admin, teacher, and student accounts. 
 
 ## Features and technology
 
-- Create, list, view, update, and delete admins, teachers, and students.
+- Create, list, view, update, and delete admins, teachers, and students. Admins cannot delete their own signed-in account.
 - JSON requests and responses, input validation, and useful error codes.
 - Spring Security session login, logout, CSRF protection, and BCrypt hashing.
+- Simple HTML frontend with login, logout, an account table, and an add/edit form.
 - Java 21, Spring Boot 4.1.2, Spring MVC, Spring Data JPA, PostgreSQL, Maven, and Docker Compose.
 
 ## Project structure
@@ -22,7 +23,12 @@ src/main/java/com/university/management/
   security/                       login rules and optional demo data
   service/                        account CRUD logic
 src/main/resources/application.properties
+src/main/resources/static/         Simple frontend (HTML, CSS, JavaScript)
 src/test/java/com/university/management/UniversityApiTests.java
+src/test/java/com/university/management/AccountWorkflowIntegrationTests.java
+src/test/java/com/university/management/service/AccountServiceTests.java
+.github/workflows/tests.yml
+TESTING_GUIDE.md
 Dockerfile
 compose.yaml
 LAB_WALKTHROUGH.md
@@ -35,10 +41,10 @@ This follows MVC-style layers: the controller receives an HTTP request, the serv
 | Role | Admin API | Teacher API | Student API |
 |---|---|---|---|
 | ADMIN | CRUD | CRUD | CRUD |
-| TEACHER | No access | CRUD | No access |
-| STUDENT | No access | No access | CRUD |
+| TEACHER | No access | Read and update own account | No access |
+| STUDENT | No access | No access | Read and update own account |
 
-These rules are enforced in `SecurityConfig`, before controller methods run. A teacher may manage any teacher account; a student may manage any student account, as required by the permission table.
+Admins create and delete accounts. Teachers and students can view and edit their own account only. These rules are enforced by Spring Security and ownership checks in the controllers.
 
 ## Run with Docker Compose
 
@@ -67,6 +73,24 @@ $env:DEMO_STUDENT_PASSWORD = 'Student123!'
 
 Use `./mvnw spring-boot:run` on macOS/Linux. The application creates or updates the simple database table through JPA. `DEMO_USERS_ENABLED` is `false` by default. For real deployments, use proper secrets and database migration management.
 
+## Run in IntelliJ IDEA (quick lab demo)
+
+1. In IntelliJ IDEA, choose **File → Open** and select the `management` project folder (the one containing `pom.xml`). Allow Maven to load the dependencies.
+2. Set the project SDK to **Java 21 or newer** in **File → Project Structure → Project**.
+3. Open `src/main/java/com/university/management/ManagementApplication.java`. Click the green gutter icon beside `main()` and choose **Modify Run Configuration**.
+4. Set **Active profiles** to `local` (or put `--spring.profiles.active=local` in **Program arguments**), then click **Run**.
+5. Open `http://localhost:8080` and sign in with `admin@university.test` / `Admin123!`.
+
+The `local` profile uses an in-memory H2 database and creates three demo accounts. Its data resets each time the app stops. Leave this profile off when using the normal PostgreSQL setup or Docker Compose. If port 8080 is busy, stop the other server first.
+
+## Frontend
+
+Open `http://localhost:8080` after starting the application. Sign in with an existing account or one of the demo accounts below when demo users are enabled. The frontend is served by Spring Boot and needs no Node.js installation, npm dependencies, or separate development server.
+
+Admins select which resource to manage: admins, teachers, or students. They can create, view, edit, and delete accounts in all three. Teachers and students see and edit only their own account. When editing, leave the password blank to keep it. Updating your own email or password requires logging in again.
+
+All requests use the same-origin session cookie. The frontend fetches a CSRF token before login, logout, and account writes. Only the frontend assets and existing login/CSRF endpoints are public; account APIs remain protected.
+
 ## API endpoints
 
 | Method | Endpoint | Meaning |
@@ -74,6 +98,7 @@ Use `./mvnw spring-boot:run` on macOS/Linux. The application creates or updates 
 | GET | `/api/auth/csrf` | Get CSRF token and session cookie |
 | POST | `/api/auth/login` | Log in with JSON email and password |
 | POST | `/api/auth/logout` | Log out |
+| GET | `/api/auth/me` | Current signed-in account (no password data) |
 | GET, POST | `/api/admins`, `/api/teachers`, `/api/students` | List or create |
 | GET, PUT, DELETE | `/api/admins/{id}`, `/api/teachers/{id}`, `/api/students/{id}` | View, update, or delete |
 
@@ -109,4 +134,4 @@ Use the returned student `id` for `GET`, `PUT`, and `DELETE` on `/api/students/{
 
 ## Tests
 
-Run `./mvnw test` or `.\mvnw.cmd test`. Integration tests use an in-memory H2 database, so PostgreSQL is not needed for the test suite. They exercise login, logout, session and CSRF behavior, CRUD, hashing, validation, error responses, and each role's access rules.
+Run `./mvnw test` or `.\mvnw.cmd test`. The suite has six service unit tests and eleven API integration tests (three new workflow tests and eight existing API tests). Integration tests use an in-memory H2 database, so PostgreSQL is not needed. GitHub Actions has separate unit and integration jobs on pushes and pull requests, with Surefire reports uploaded for each job. See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the test cases and the real bug reproduced and fixed in the commit history.
